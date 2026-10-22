@@ -1,0 +1,301 @@
+{
+  "name": "fetch_article_subworkflow",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "url"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b8aa37f2-f1bf-41f1-877f-bd660882e2ff",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "5b3faa07-8170-4c7d-b19a-45b71e6dcd9f",
+      "name": "Fetch Page",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "title",
+              "cssSelector": "title"
+            },
+            {
+              "key": "body",
+              "cssSelector": "body",
+              "skipSelectors": "script, style, nav, footer, header, aside, noscript, svg"
+            }
+          ]
+        },
+        "options": {
+          "trimValues": true,
+          "cleanUpText": true
+        }
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "34442215-b75d-4d40-9ec5-5cc7321be726",
+      "name": "Extract Text",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "# Collapse whitespace, count words, keep the first 6000 characters for the model.\nMAX_CHARS = 6000\nMIN_WORDS = 150   # fewer words = blocked, paywalled or JavaScript-only page\n\nj = _items[0][\"json\"]\ntitle = \" \".join(str(j.get(\"title\") or \"\").split())\nbody = \" \".join(str(j.get(\"body\") or \"\").split())\nwords = len(body.split())\n\nreturn [{\"json\": {\n    \"title\": title[:200],\n    \"text\": body[:MAX_CHARS],\n    \"word_count\": words,\n    \"status\": \"ok\" if words >= MIN_WORDS else \"too_short\",\n    \"source\": \"direct\",\n}}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        0
+      ],
+      "id": "4ad0b4b8-49be-4d88-ba57-0867eff34340",
+      "name": "Clean The Text"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4487eb1f-1b8c-4a7f-accb-9a2c7c154557",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "ok",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        0
+      ],
+      "id": "da86d53b-9a03-4ecd-83b5-ec31f23d0409",
+      "name": "Enough Text?"
+    },
+    {
+      "parameters": {
+        "url": "=  https://r.jina.ai/{{ $('When Executed by Another Workflow').first().json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Return-Format",
+              "value": "text"
+            },
+            {
+              "name": "X-Retain-Images",
+              "value": "none"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1104,
+        96
+      ],
+      "id": "41e7e38a-9e5e-4e1b-ab69-3c25d88e840e",
+      "name": "Fetch Via Jina",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "# Jina Reader returns: \"Title: ...\", \"URL Source: ...\", then \"Markdown Content:\" and the article.\nMAX_CHARS = 6000\nMIN_WORDS = 150\n\nraw = str(_items[0][\"json\"].get(\"data\") or \"\")\ntitle = \"\"\nfor line in raw.split(\"\\n\"):\n    if line.startswith(\"Title:\"):\n        title = line[6:].strip()\n        break\ncontent = raw.split(\"Markdown Content:\", 1)[1] if \"Markdown Content:\" in raw else raw\ncontent = \" \".join(content.split())\nwords = len(content.split())\n\nreturn [{\"json\": {\n    \"title\": title[:200],\n    \"text\": content[:MAX_CHARS],\n    \"word_count\": words,\n    \"status\": \"ok\" if words >= MIN_WORDS else \"fetch_failed\",\n    \"source\": \"jina\",\n}}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        96
+      ],
+      "id": "9dc432e4-1fb6-479b-bbf4-443d7b7bcc0b",
+      "name": "Clean Jina Text"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        -96
+      ],
+      "id": "93218ad2-5233-45ea-a4a7-536e09be7bf5",
+      "name": "Return Result"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Fetch Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text": {
+      "main": [
+        [
+          {
+            "node": "Clean The Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean The Text": {
+      "main": [
+        [
+          {
+            "node": "Enough Text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enough Text?": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Via Jina",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Via Jina": {
+      "main": [
+        [
+          {
+            "node": "Clean Jina Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Jina Text": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "ZXom0u0Ix2SMxDdJ",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "8cc1cc40-a266-454f-a025-d34a4a87e44b",
+  "meta": {
+    "instanceId": "24381e09c5da2b6457e97b471465774c35c570e65f5e49b62138dcf80c3837f9"
+  },
+  "nodeGroups": [],
+  "id": "UQit8MBAMUZDxHAr",
+  "tags": []
+}

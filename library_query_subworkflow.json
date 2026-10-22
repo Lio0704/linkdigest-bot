@@ -1,0 +1,172 @@
+{
+  "name": "library_query_subworkflow",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "chat_id",
+              "type": "number"
+            },
+            {
+              "name": "mode"
+            },
+            {
+              "name": "keyword"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b280049b-f661-486e-bd9f-62785c300e37",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1UUt4jr-j-zNnq-ZVaSL2F3L6gLjeQ0vnZRroeWQP4w4",
+          "mode": "list",
+          "cachedResultName": "LinkDigest",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UUt4jr-j-zNnq-ZVaSL2F3L6gLjeQ0vnZRroeWQP4w4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "articles",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UUt4jr-j-zNnq-ZVaSL2F3L6gLjeQ0vnZRroeWQP4w4/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chat_id",
+              "lookupValue": "={{ $json.chat_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        192,
+        0
+      ],
+      "id": "430bf5a1-5f78-4f99-baea-18053f8d8cde",
+      "name": "Get My Articles",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0kkmOZaErV4EYwsw",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7ce28c30-de85-48ba-a9b6-f6043b0f33b3",
+              "name": "mode",
+              "value": "={{ $('When Executed by Another Workflow').first().json.mode }}",
+              "type": "string"
+            },
+            {
+              "id": "a8f64d3c-3da8-49fd-a990-22d28012eaa9",
+              "name": "keyword",
+              "value": "={{ $('When Executed by Another Workflow').first().json.keyword }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        368,
+        0
+      ],
+      "id": "95fd9ae1-374d-4719-8284-2527afe88ab5",
+      "name": "Add Context"
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "# Turn the user's saved rows into one Telegram message (HTML mode).\ndef esc(s):\n    return str(s).replace(\"&\", \"&amp;\").replace(\"<\", \"&lt;\").replace(\">\", \"&gt;\")\n\nitems = [i[\"json\"] for i in _items]\nfirst = items[0] if items else {}\nmode = str(first.get(\"mode\") or \"list\")\nkeyword = str(first.get(\"keyword\") or \"\").strip().lower()\n\nrows = [r for r in items if r.get(\"url\")]   # skip the empty item when nothing is saved\nrows.reverse()                              # newest first: the sheet appends at the bottom\n\nif mode == \"search\" and not keyword:\n    return [{\"json\": {\"reply\": esc(\"Usage: /search <keyword>, for example /search ai\")}}]\n\nif mode == \"search\":\n    found = []\n    for r in rows:\n        haystack = (str(r.get(\"title\") or \"\") + \" \" + str(r.get(\"tags\") or \"\") + \" \"\n                    + str(r.get(\"summary\") or \"\")).lower()\n        if keyword in haystack:\n            found.append(r)\n    rows = found\n\nrows = rows[:10]\n\nif not rows:\n    if mode == \"search\":\n        reply = \"No saved article matches “\" + esc(keyword) + \"”.\"\n    else:\n        reply = \"Your library is empty. Send me a link to save your first article!\"\nelse:\n    head = \"🔎 <b>Results for “\" + esc(keyword) + \"”</b>\" if mode == \"search\" else \"📚 <b>Your latest saves</b>\"\n    lines = [head, \"\"]\n    for n, r in enumerate(rows, 1):\n        title = str(r.get(\"title\") or r.get(\"url\"))\n        flag = \"\" if r.get(\"status\") == \"summarised\" else \" (link only)\"\n        lines.append(str(n) + \". \" + esc(title) + flag)\n        lines.append(\"    \" + esc(r.get(\"url\")))\n    reply = \"\\n\".join(lines)\n\nreturn [{\"json\": {\"reply\": reply}}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        0
+      ],
+      "id": "343ebc7b-4e7e-4b02-a13e-c7f20e279187",
+      "name": "Build The List"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get My Articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get My Articles": {
+      "main": [
+        [
+          {
+            "node": "Add Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Context": {
+      "main": [
+        [
+          {
+            "node": "Build The List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "ZXom0u0Ix2SMxDdJ",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "b178caea-9f3e-43d6-bbf7-7e9484bc3911",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "24381e09c5da2b6457e97b471465774c35c570e65f5e49b62138dcf80c3837f9"
+  },
+  "nodeGroups": [],
+  "id": "zzhqjQBV5MyyAI2r",
+  "tags": []
+}
