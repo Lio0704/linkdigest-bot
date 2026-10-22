@@ -2,7 +2,7 @@
 
 A Telegram read-later assistant built with n8n. Send the bot an article link: it fetches the page, a free AI model writes a three-sentence summary with 3 to 5 tags, the article is saved, and the bot replies with the summary. `/list` shows your latest saves and `/search <keyword>` finds one again.
 
-![Main workflow](docs/screenshots/main-workflow.png)
+![Main workflow](main-workflow.png)
 
 ## What it does
 
@@ -56,7 +56,7 @@ The full specification and diagram are in the project proposal.
 ├── .env.example           # every variable needed, without real values
 ├── .gitignore             # keeps .env and local data out of Git
 ├── workflows/             # n8n workflows exported as JSON (same version as the demo)
-└── docs/screenshots/      # screenshots used in this README
+└── *.png                  # screenshots used in this README
 ```
 
 ## Setup: from clone to running
@@ -126,8 +126,8 @@ Each sub-workflow can also be tested alone with the mock data pinned on its trig
 
 ## Screenshots
 
-![Telegram conversation](docs/screenshots/telegram-demo.png)
-![Google Sheet](docs/screenshots/google-sheet.png)
+![Telegram conversation](telegram_demo.png)
+![Google Sheet](google-sheet.png)
 
 ## Robustness and security
 
